@@ -4,6 +4,7 @@ const std = @import("std");
 const log = std.log;
 const out = std.io.getStdOut().writer();
 const err = std.io.getStdErr().writer();
+const child = std.process.Child;
 
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = gpa.allocator();
@@ -14,7 +15,7 @@ const Subcommand = enum {
     @"is-unlocked"
 };
 
-pub fn main() anyerror!void {
+pub fn main() !void {
     const argv = std.os.argv;
 
     if (argv.len != 3) {
@@ -42,11 +43,11 @@ pub fn main() anyerror!void {
 
     const dataset = it.next().?;
 
-    switch (command) {
+    try switch (command) {
         .offer => offer(dataset),
         .@"is-locked" => is_locked(dataset),
         .@"is-unlocked" => is_unlocked(dataset)
-    }
+    };
 }
 
 fn usage() anyerror!void {
@@ -54,8 +55,14 @@ fn usage() anyerror!void {
     try err.print("where: command in (offer, is-locked, is-unlocked)\n", .{});
 }
 
-fn is_locked(dataset: [*:0]const u8) void {
+fn is_locked(dataset: [*:0]const u8) !void {
     log.info("is_locked?: {s}", .{dataset});
+    var process = try child.exec(.{
+        .allocator = allocator,
+        .argv = &[_][]const u8{ "echo", "hello" }
+        //.argv = &[_][]const u8{ "zfs", "get", "-H", "keystatus", dataset }
+    });
+    log.info("stdout is: {s}", .{process.stdout});
 }
 
 fn is_unlocked(dataset: [*:0]const u8) void {
