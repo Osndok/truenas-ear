@@ -66,6 +66,10 @@ fn is_locked(dataset: [*:0]const u8) !void {
         //.argv = &[_][]const u8{ "echo", "hello" }
         .argv = &[_][]const u8{ "zfs", "get", "-H", "keystatus", dataset2 }
     });
+    if (process.term.Exited != 0) {
+        log.err("returned exit status {}: zfs get -H keystatus {s}\n{s}", .{process.term.Exited, dataset2, process.stderr});
+        return std.os.ExecveError.Unexpected;
+    }
     log.info("stdout is: {s}", .{process.stdout});
 }
 
