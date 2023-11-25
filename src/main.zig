@@ -63,8 +63,56 @@ fn cstringToString(input: CString) String {
     return input[0..length];
 }
 
+fn run(argv: []const String) !String {
+    var process = try child.exec(.{
+        .allocator = allocator,
+        .argv = argv
+    });
+
+    if (process.term.Exited != 0) {
+        log.err("process returned exit status {}: {any}\n{s}", .{process.term.Exited, argv, process.stderr});
+        return std.os.ExecveError.Unexpected;
+    }
+
+    return process.stdout;
+}
+
+const LockStatus = enum {
+    locked,
+    unlocked,
+    unknown
+};
+
+//fn contains(haystack:String, needle:String) bool {
+
+//}
+
+fn getLockStatus(dataset: String) !LockStatus {
+    var line = try run(&[_]String {
+        "zfs", "get", "-H", "keystatus", dataset
+    });
+
+    const tab = std.mem.indexOf(u8, line, "\t") orelse return LockStatus.unknown;
+
+    var statusEtc = line[tab..];
+    //log.debug("statusEtc = {}", statusEtc);
+
+    if (std.mem.startsWith(u8, statusEtc, "unavailable")) {
+        return LockStatus.locked;
+    }
+
+    if (std.mem.startsWith(u8, statusEtc, "available")) {
+        return LockStatus.unlocked;
+    }
+
+    return LockStatus.unknown;
+}
+
 fn is_locked(dataset: String) !void {
     log.info("is_locked?: {s}", .{dataset});
+
+    var status = try getLockStatus(dataset);
+    log.info("{s} is {!}", .{dataset, status});
 
     var process = try child.exec(.{
         .allocator = allocator,
