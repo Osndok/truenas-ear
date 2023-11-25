@@ -41,6 +41,8 @@ pub fn main() !void {
         };
     };
 
+    //log.info("type? {}", .{@TypeOf(argv[2])});
+    
     const dataset = it.next().?;
 
     try switch (command) {
@@ -57,10 +59,12 @@ fn usage() anyerror!void {
 
 fn is_locked(dataset: [*:0]const u8) !void {
     log.info("is_locked?: {s}", .{dataset});
+    var length = std.mem.len(dataset);
+    var dataset2: []const u8 = dataset[0..length];
     var process = try child.exec(.{
         .allocator = allocator,
-        .argv = &[_][]const u8{ "echo", "hello" }
-        //.argv = &[_][]const u8{ "zfs", "get", "-H", "keystatus", dataset }
+        //.argv = &[_][]const u8{ "echo", "hello" }
+        .argv = &[_][]const u8{ "zfs", "get", "-H", "keystatus", dataset2 }
     });
     log.info("stdout is: {s}", .{process.stdout});
 }
