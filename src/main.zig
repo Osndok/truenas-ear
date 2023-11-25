@@ -13,7 +13,8 @@ var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = gpa.allocator();
 
 const Subcommand = enum {
-    offer,
+    lock,
+    unlock,
     @"is-locked",
     @"is-unlocked"
 };
@@ -47,7 +48,8 @@ pub fn main() !void {
     const dataset = cstringToString(it.next().?);
 
     try switch (command) {
-        .offer => offer(dataset),
+        .lock => lock(dataset),
+        .unlock => unlock(dataset),
         .@"is-locked" => is_locked(dataset),
         .@"is-unlocked" => is_unlocked(dataset)
     };
@@ -55,7 +57,7 @@ pub fn main() !void {
 
 fn usage() anyerror!void {
     try err.print("usage: {s} command dataset\n", .{std.os.argv[0]});
-    try err.print("where: command in (offer, is-locked, is-unlocked)\n", .{});
+    try err.print("where: command in (lock, unlock, is-locked, is-unlocked)\n", .{});
 }
 
 fn cstringToString(input: CString) String {
@@ -107,8 +109,6 @@ fn getLockStatus(dataset: String) !LockStatus {
 }
 
 fn is_locked(dataset: String) !void {
-    log.info("is_locked?: {s}", .{dataset});
-
     var status = try getLockStatus(dataset);
     log.info("{s} is {!}", .{dataset, status});
 
@@ -120,8 +120,6 @@ fn is_locked(dataset: String) !void {
 }
 
 fn is_unlocked(dataset: String) !void {
-    log.info("is_unlocked?: {s}", .{dataset});
-
     var status = try getLockStatus(dataset);
     log.info("{s} is {!}", .{dataset, status});
 
@@ -132,7 +130,19 @@ fn is_unlocked(dataset: String) !void {
     }
 }
 
-fn offer(dataset: String) !void {
-    log.info("offer: {s}", .{dataset});
+fn unlock(dataset: String) !void {
+    log.info("unlock: {s}", .{dataset});
+    // read password from stdin (or just have child read our stdin?)
+    // zfs load key
+    // zfs mount
+    // look for list of services to start, and scripts to execute: "post-mount:/some/script.sh"
+}
+
+fn lock(dataset: String) !void {
+    log.info("lock: {s}", .{dataset});
+    // stop services
+    // wait?
+    // unmount
+    // unload key
 }
 
