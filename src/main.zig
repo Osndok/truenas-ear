@@ -149,6 +149,7 @@ fn unlock(dataset: String) !void {
     }, allocator);
     {
         process.stdin_behavior = child.StdIo.Inherit;
+        process.stdout_behavior = child.StdIo.Inherit;
         process.stderr_behavior = child.StdIo.Inherit;
     }
     
@@ -159,14 +160,30 @@ fn unlock(dataset: String) !void {
         log.err("exit-status {}: zfs load-key {s}", .{status.Exited, dataset});
         return std.os.ExecveError.Unexpected;
     }
+    //???: process.deinit();
+
+    process = child.init(&[_]String{
+        "zfs", "mount", dataset
+    }, allocator);
+    {
+        process.stdin_behavior = child.StdIo.Ignore;
+        process.stdout_behavior = child.StdIo.Inherit;
+        process.stderr_behavior = child.StdIo.Inherit;
+    }
+    
+    try process.spawn();
+    status = try process.wait();
+    
+    if (status.Exited != 0) {
+        log.warn("exit-status {}: zfs mount {s}", .{status.Exited, dataset});
+    }
+    //???: process.deinit();
 
     const mountPoint = try concat("/mnt/", dataset);
     defer allocator.free(mountPoint);
 
     log.debug("mountPoint: {s}", .{mountPoint});
-    
-    // zfs load key
-    // zfs mount
+
     // look for list of services to start, and scripts to execute: "post-mount:/some/script.sh"
 }
 
