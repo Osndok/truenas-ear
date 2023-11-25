@@ -143,7 +143,8 @@ fn concat(one: String, two: String) !String {
 fn unlock(dataset: String) !void {
     log.info("unlock: {s}", .{dataset});
 
-    // read password from stdin (or just have child read our stdin?)
+    // (1) zfs load-key $DATASET
+
     var process = child.init(&[_]String{
         "zfs", "load-key", dataset
     }, allocator);
@@ -162,6 +163,8 @@ fn unlock(dataset: String) !void {
     }
     //???: process.deinit();
 
+    // (2) zfs mount $DATASET
+
     process = child.init(&[_]String{
         "zfs", "mount", dataset
     }, allocator);
@@ -179,12 +182,35 @@ fn unlock(dataset: String) !void {
     }
     //???: process.deinit();
 
+    // NB: Assuming '/mnt/' prefix (TrueNAS)
     const mountPoint = try concat("/mnt/", dataset);
     defer allocator.free(mountPoint);
 
     log.debug("mountPoint: {s}", .{mountPoint});
 
+    const followUpFile = try concat(mountPoint, "/.truenas-ear");
+    defer allocator.free(followUpFile);
+
+    log.debug("followUpFile: {s}", .{followUpFile});
+
     // look for list of services to start, and scripts to execute: "post-mount:/some/script.sh"
+    var file = std.fs.cwd().openFile(followUpFile, .{}) catch {
+        log.info("dne: {s}", .{followUpFile});
+        return;
+    };
+    defer file.close();
+
+    var buf_reader = std.io.bufferedReader(file.reader());
+    var in_stream = buf_reader.reader();
+    var buf: [2048]u8 = undefined;
+    while (try in_stream.readUntilDelimiterOrEof(&buf, '\n')) |line| {
+        if (line.len == 0 or line[0] == '#' ) {
+            continue;
+        }
+
+        // do something with line...
+        log.debug("line: {s}", .{line});
+    }
 }
 
 fn lock(dataset: String) !void {
