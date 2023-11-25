@@ -130,9 +130,41 @@ fn is_unlocked(dataset: String) !void {
     }
 }
 
+fn concat(one: String, two: String) !String {
+    //var b = try std.Buffer.init(allocator, one);
+    //try b.append(two);
+    //return b;
+    var result = try allocator.alloc(u8, one.len+two.len);
+    std.mem.copy(u8, result[0..], one);
+    std.mem.copy(u8, result[one.len..], two);
+    return result;
+}
+
 fn unlock(dataset: String) !void {
     log.info("unlock: {s}", .{dataset});
+
     // read password from stdin (or just have child read our stdin?)
+    var process = child.init(&[_]String{
+        "zfs", "load-key", dataset
+    }, allocator);
+    {
+        process.stdin_behavior = child.StdIo.Inherit;
+        process.stderr_behavior = child.StdIo.Inherit;
+    }
+    
+    try process.spawn();
+    var status = try process.wait();
+    
+    if (status.Exited != 0) {
+        log.err("exit-status {}: zfs load-key {s}", .{status.Exited, dataset});
+        return std.os.ExecveError.Unexpected;
+    }
+
+    const mountPoint = try concat("/mnt/", dataset);
+    defer allocator.free(mountPoint);
+
+    log.debug("mountPoint: {s}", .{mountPoint});
+    
     // zfs load key
     // zfs mount
     // look for list of services to start, and scripts to execute: "post-mount:/some/script.sh"
