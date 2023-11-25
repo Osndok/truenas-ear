@@ -6,6 +6,9 @@ const out = std.io.getStdOut().writer();
 const err = std.io.getStdErr().writer();
 const child = std.process.Child;
 
+const String = []const u8;
+const CString = [*:0]const u8;
+
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = gpa.allocator();
 
@@ -16,7 +19,7 @@ const Subcommand = enum {
 };
 
 pub fn main() !void {
-    const argv = std.os.argv;
+    const argv : []CString = std.os.argv;
 
     if (argv.len != 3) {
         try usage();
@@ -40,10 +43,8 @@ pub fn main() !void {
             std.os.exit(1);
         };
     };
-
-    //log.info("type? {}", .{@TypeOf(argv[2])});
-    
-    const dataset = it.next().?;
+   
+    const dataset = cstringToString(it.next().?);
 
     try switch (command) {
         .offer => offer(dataset),
@@ -57,27 +58,32 @@ fn usage() anyerror!void {
     try err.print("where: command in (offer, is-locked, is-unlocked)\n", .{});
 }
 
-fn is_locked(dataset: [*:0]const u8) !void {
+fn cstringToString(input: CString) String {
+    var length = std.mem.len(input);
+    return input[0..length];
+}
+
+fn is_locked(dataset: String) !void {
     log.info("is_locked?: {s}", .{dataset});
-    var length = std.mem.len(dataset);
-    var dataset2: []const u8 = dataset[0..length];
+
     var process = try child.exec(.{
         .allocator = allocator,
-        //.argv = &[_][]const u8{ "echo", "hello" }
-        .argv = &[_][]const u8{ "zfs", "get", "-H", "keystatus", dataset2 }
+        .argv = &[_]String { "zfs", "get", "-H", "keystatus", dataset }
     });
+
     if (process.term.Exited != 0) {
-        log.err("returned exit status {}: zfs get -H keystatus {s}\n{s}", .{process.term.Exited, dataset2, process.stderr});
+        log.err("returned exit status {}: zfs get -H keystatus {s}\n{s}", .{process.term.Exited, dataset, process.stderr});
         return std.os.ExecveError.Unexpected;
     }
+
     log.info("stdout is: {s}", .{process.stdout});
 }
 
-fn is_unlocked(dataset: [*:0]const u8) void {
+fn is_unlocked(dataset: String) void {
     log.info("is_unlocked?: {s}", .{dataset});
 }
 
-fn offer(dataset: [*:0]const u8) void {
+fn offer(dataset: String) void {
     log.info("offer: {s}", .{dataset});
 }
 
