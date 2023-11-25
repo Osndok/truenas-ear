@@ -83,19 +83,17 @@ const LockStatus = enum {
     unknown
 };
 
-//fn contains(haystack:String, needle:String) bool {
-
-//}
-
 fn getLockStatus(dataset: String) !LockStatus {
     var line = try run(&[_]String {
         "zfs", "get", "-H", "keystatus", dataset
     });
 
     const tab = std.mem.indexOf(u8, line, "\t") orelse return LockStatus.unknown;
+    const afterTab = line[tab+1..];
+    const tab2 = std.mem.indexOf(u8, afterTab, "\t") orelse return LockStatus.unknown;
 
-    var statusEtc = line[tab..];
-    //log.debug("statusEtc = {}", statusEtc);
+    const statusEtc = afterTab[tab2+1..];
+    log.debug("statusEtc = {s}", .{statusEtc});
 
     if (std.mem.startsWith(u8, statusEtc, "unavailable")) {
         return LockStatus.locked;
@@ -114,24 +112,27 @@ fn is_locked(dataset: String) !void {
     var status = try getLockStatus(dataset);
     log.info("{s} is {!}", .{dataset, status});
 
-    var process = try child.exec(.{
-        .allocator = allocator,
-        .argv = &[_]String { "zfs", "get", "-H", "keystatus", dataset }
-    });
-
-    if (process.term.Exited != 0) {
-        log.err("returned exit status {}: zfs get -H keystatus {s}\n{s}", .{process.term.Exited, dataset, process.stderr});
-        return std.os.ExecveError.Unexpected;
+    switch (status) {
+        .locked => std.os.exit(0),
+        .unknown => std.os.exit(1),
+        .unlocked => std.os.exit(2)
     }
-
-    log.info("stdout is: {s}", .{process.stdout});
 }
 
-fn is_unlocked(dataset: String) void {
+fn is_unlocked(dataset: String) !void {
     log.info("is_unlocked?: {s}", .{dataset});
+
+    var status = try getLockStatus(dataset);
+    log.info("{s} is {!}", .{dataset, status});
+
+    switch (status) {
+        .unlocked => std.os.exit(0),
+        .unknown => std.os.exit(1),
+        .locked => std.os.exit(2),
+    }
 }
 
-fn offer(dataset: String) void {
+fn offer(dataset: String) !void {
     log.info("offer: {s}", .{dataset});
 }
 
