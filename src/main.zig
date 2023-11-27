@@ -279,7 +279,25 @@ fn handle_post_unlock_followup_line(dataset: String, line: String) !void
 fn start_service(service_name: String) !void
 {
     log.info("start_service: {s}", .{service_name});
-    // TODO
+
+    var process = child.init(&[_]String{
+        "midclt", "call", "chart.release.scale", service_name, "{\"replica_count\": 1}"
+    }, allocator);
+    {
+        process.stdin_behavior = child.StdIo.Ignore;
+        process.stdout_behavior = child.StdIo.Inherit;
+        process.stderr_behavior = child.StdIo.Inherit;
+    }
+
+    // NB: This (or one of the next lines) will throw 'error.FileNotFound' if midclt is not present.
+    try process.spawn();
+    var status = try process.wait();
+    
+    if (status.Exited != 0)
+    {
+        log.err("unable to start {s} service, midclt exit status {}", .{service_name, status.Exited});
+    }
+    //???: process.deinit();
 }
 
 fn unlock(dataset: String) !void
