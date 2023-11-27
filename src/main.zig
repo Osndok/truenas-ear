@@ -249,7 +249,7 @@ fn do_post_unlock_followups(dataset: String) !void
 
 fn handle_post_unlock_followup_line(dataset: String, line: String) !void
 {
-    log.debug("handle_post_unlock_followup_line: {s}, {s}", .{dataset, line});
+    //log.debug("handle_post_unlock_followup_line: {s}, {s}", .{dataset, line});
     
     const colon = std.mem.indexOf(u8, line, ":")
     orelse 
@@ -272,6 +272,8 @@ fn handle_post_unlock_followup_line(dataset: String, line: String) !void
 
     const after_colon = line[colon+1..];
     log.debug("after_colon: {s}", .{after_colon});
+    
+    _ = dataset;
 }
 
 fn start_service(service_name: String) !void
