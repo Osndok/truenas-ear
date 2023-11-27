@@ -239,7 +239,7 @@ fn do_post_unlock_followups(dataset: String) !void
             continue;
         }
 
-        handle_post_unlock_followup_line(dataset, line)
+        handle_post_unlock_followup_line(dataset, mountPoint, line)
         catch |e|
         {
             log.err("{s}: {!}", .{line, e});
@@ -247,7 +247,7 @@ fn do_post_unlock_followups(dataset: String) !void
     }
 }
 
-fn handle_post_unlock_followup_line(dataset: String, line: String) !void
+fn handle_post_unlock_followup_line(dataset: String, mountPoint: String, line: String) !void
 {
     //log.debug("handle_post_unlock_followup_line: {s}, {s}", .{dataset, line});
     
@@ -272,8 +272,8 @@ fn handle_post_unlock_followup_line(dataset: String, line: String) !void
 
     const after_colon = line[colon+1..];
     log.debug("after_colon: {s}", .{after_colon});
-    
-    _ = dataset;
+
+    try exec_user_shell_line(dataset, mountPoint, after_colon);
 }
 
 fn start_service(service_name: String) !void
@@ -296,6 +296,32 @@ fn start_service(service_name: String) !void
     if (status.Exited != 0)
     {
         log.err("unable to start {s} service, midclt exit status {}", .{service_name, status.Exited});
+    }
+    //???: process.deinit();
+}
+
+fn exec_user_shell_line(dataset: String, mountPoint: String, shell_line: String) !void
+{
+    log.info("exec_user_shell_line: {s}, {s}, {s}", .{dataset, mountPoint, shell_line});
+
+    // TODO: set "TRUENAS_EAR_DATASET" env var to 'dataset'
+    // TODO: set pwd to 'mountPoint'
+    var process = child.init(&[_]String{
+        "bash", "-c", shell_line
+    }, allocator);
+    {
+        process.stdin_behavior = child.StdIo.Ignore;
+        process.stdout_behavior = child.StdIo.Inherit;
+        process.stderr_behavior = child.StdIo.Inherit;
+    }
+
+    // NB: This (or one of the next lines) will throw 'error.FileNotFound' if midclt is not present.
+    try process.spawn();
+    var status = try process.wait();
+    
+    if (status.Exited != 0)
+    {
+        log.err("exist status {} from shell script line: {s}", .{status.Exited, shell_line});
     }
     //???: process.deinit();
 }
