@@ -239,9 +239,37 @@ fn do_post_unlock_followups(dataset: String) !void
             continue;
         }
 
-        // do something with line...
-        log.debug("line: {s}", .{line});
+        handle_post_unlock_followup_line(dataset, line)
+        catch |e|
+        {
+            log.err("{s}: {!}", .{line, e});
+        };
     }
+}
+
+fn handle_post_unlock_followup_line(dataset: String, line: String) !void
+{
+    log.debug("handle_post_unlock_followup_line: {s}, {s}", .{dataset, line});
+    
+    const colon = std.mem.indexOf(u8, line, ":")
+    orelse 
+    {
+        start_service(line)
+        catch |e|
+        {
+            log.err("start_service: {s}: {!}", .{line, e});
+        };
+        return;
+    };
+
+    const before_colon = line[0..colon];
+    log.debug("before_colon: {s}", .{before_colon});
+}
+
+fn start_service(service_name: String) !void
+{
+    log.info("start_service: {s}", .{service_name});
+    // TODO
 }
 
 fn unlock(dataset: String) !void
