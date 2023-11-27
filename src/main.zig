@@ -263,7 +263,15 @@ fn handle_post_unlock_followup_line(dataset: String, line: String) !void
     };
 
     const before_colon = line[0..colon];
-    log.debug("before_colon: {s}", .{before_colon});
+
+    if (!std.mem.eql(u8, before_colon, "post-mount"))
+    {
+        log.debug("ignore: {s}", .{line});
+        return;
+    }
+
+    const after_colon = line[colon+1..];
+    log.debug("after_colon: {s}", .{after_colon});
 }
 
 fn start_service(service_name: String) !void
