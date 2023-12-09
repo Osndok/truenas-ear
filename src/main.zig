@@ -333,6 +333,7 @@ fn unlock(dataset: String) !void
     try zfs_load_key(dataset);
     try zfs_mount(dataset);
     try do_post_unlock_followups(dataset);
+    // ??? Wait for kubernetes to reach a stable state?
 }
 
 fn lock(dataset: String) !void
