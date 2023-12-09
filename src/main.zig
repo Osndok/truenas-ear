@@ -12,6 +12,13 @@ const CString = [*:0]const u8;
 var gpa = std.heap.GeneralPurposeAllocator(.{}){};
 var allocator = gpa.allocator();
 
+// When deployed, we have to specify the full path, because 'sbin' will not be in our path.
+const ZFS_SBIN = "/usr/sbin/zfs";
+
+// In development, there is no sbin/zfs, so we use the kludge that the dev puts in our path.
+const ZFS_IN_PATH = "zfs";
+
+
 const Subcommand = enum
 {
     lock,
@@ -103,7 +110,7 @@ const LockStatus = enum
 fn getLockStatus(dataset: String) !LockStatus
 {
     var line = try run(&[_]String {
-        "zfs", "get", "-H", "keystatus", dataset
+        zfs(), "get", "-H", "keystatus", dataset
     });
 
     const tab = std.mem.indexOf(u8, line, "\t") orelse return LockStatus.unknown;
@@ -166,7 +173,7 @@ fn concat(one: String, two: String) !String
 fn zfs_load_key(dataset: String) !void
 {
     var process = child.init(&[_]String{
-        "zfs", "load-key", dataset
+        zfs(), "load-key", dataset
     }, allocator);
     {
         process.stdin_behavior = child.StdIo.Inherit;
@@ -188,7 +195,7 @@ fn zfs_load_key(dataset: String) !void
 fn zfs_mount(dataset: String) !void
 {
     var process = child.init(&[_]String{
-        "zfs", "mount", dataset
+        zfs(), "mount", dataset
     }, allocator);
     {
         process.stdin_behavior = child.StdIo.Ignore;
@@ -324,6 +331,35 @@ fn exec_user_shell_line(dataset: String, mountPoint: String, shell_line: String)
         log.err("exist status {} from shell script line: {s}", .{status.Exited, shell_line});
     }
     //???: process.deinit();
+}
+
+fn fileExists(path: String) !bool {
+    const file = std.fs.cwd().openFile(path, .{}) catch |e| switch (e) {
+        error.FileNotFound => return false,
+        else => return e,
+    };
+
+    file.close();
+
+    return true;
+}
+
+test "fileExists()" {
+    try std.testing.expect(try fileExists("/"));
+    try std.testing.expect(!try fileExists("/this-is-a-file-name-which-really-should-not-exist"));
+}
+
+fn zfs() String {
+    const exists = fileExists(ZFS_SBIN) catch { return ZFS_IN_PATH; };
+
+    if (exists)
+    {
+        return ZFS_SBIN;
+    }
+    else
+    {
+        return ZFS_IN_PATH;
+    }
 }
 
 fn unlock(dataset: String) !void
