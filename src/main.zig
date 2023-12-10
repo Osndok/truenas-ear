@@ -58,6 +58,8 @@ pub fn main() !void
             std.os.exit(1);
         };
     };
+
+    try set_user_ids();
    
     const dataset = cstringToString(it.next().?);
 
@@ -68,6 +70,24 @@ pub fn main() !void
         .@"is-locked" => is_locked(dataset),
         .@"is-unlocked" => is_unlocked(dataset)
     };
+}
+
+fn set_user_ids() !void
+{
+    const os = std.os.linux;
+    const uid = os.getuid();
+    const euid = os.geteuid();
+    log.debug("observe: uid = {}, euid = {}", .{uid, euid});
+
+    // As a suid binary, we only get effective user-id of root.
+    // If we do not set the real user-id to root too, then shell scripts will run as the luser.
+    const uid2 = os.setuid(0);
+    const euid2 = os.seteuid(0);
+
+    log.debug("now: uid2 = {}, euid2 = {}", .{uid2, euid2});
+
+    //try exec_user_shell_line("dataset", "/mnt/point", "whoami");
+    //try exec_user_shell_line("dataset", "/mnt/point", "env");
 }
 
 fn usage() anyerror!void
