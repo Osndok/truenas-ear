@@ -14,6 +14,7 @@ var allocator = gpa.allocator();
 
 // When deployed, we have to specify the full path, because 'sbin' will not be in our path.
 const ZFS_SBIN = "/usr/sbin/zfs";
+const SERVICE_SBIN = "/usr/sbin/service";
 
 // In development, there is no sbin/zfs, so we use the kludge that the dev puts in our path.
 const ZFS_IN_PATH = "zfs";
@@ -349,34 +350,89 @@ fn handle_post_unlock_followup_line(dataset: String, mountPoint: String, line: S
     const colon = std.mem.indexOf(u8, line, ":")
     orelse 
     {
-        start_service(line)
+        start_by_name(line)
         catch |e|
         {
-            log.err("start_service: {s}: {!}", .{line, e});
+            log.err("start_by_name: {s}: {!}", .{line, e});
         };
         return;
     };
 
     const before_colon = line[0..colon];
-
-    if (!std.mem.eql(u8, before_colon, "post-mount"))
-    {
-        log.debug("ignore: {s}", .{line});
-        return;
-    }
-
     const after_colon = line[colon+1..];
     log.debug("after_colon: {s}", .{after_colon});
 
-    try exec_user_shell_line(dataset, mountPoint, after_colon);
+    if (std.mem.eql(u8, before_colon, "app"))
+    {
+        start_app(after_colon)
+        catch |e|
+        {
+            log.err("start_app: {s}: {!}", .{line, e});
+        };
+        return;
+    }
+
+    if (std.mem.eql(u8, before_colon, "service"))
+    {
+        start_service(after_colon)
+        catch |e|
+        {
+            log.err("start_service: {s}: {!}", .{line, e});
+        };
+        return;
+    }
+
+    if (std.mem.eql(u8, before_colon, "post-mount"))
+    {
+        try exec_user_shell_line(dataset, mountPoint, after_colon);
+        return;
+    }
+
+    log.debug("ignore: {s}", .{line});
+
 }
 
-fn start_service(service_name: String) !void
+fn start_by_name(name: String) !void
 {
-    log.info("start_service: {s}", .{service_name});
+    log.info("start_by_name: {s}", .{name});
+
+    if (try service_file_exists(name))
+    {
+        try start_service(name);
+    }
+    else
+    {
+        try start_app(name);
+    }
+}
+
+pub fn service_file_exists(serviceName: String) !bool
+{
+    //const serviceFilePath = std.build.os.Path.join(String{"/usr/lib/systemd/system/", serviceName, ".service"}, ".");
+    //const serviceFilePath = "/usr/lib/systemd/system/" ++ serviceName ++ ".service";
+    //const serviceFilePath = std.mem.cat("/usr/lib/systemd/system/", serviceName, ".service");
+    //const serviceFilePath = std.fmt.format(u8, "/usr/lib/systemd/system/{}.service", .{serviceName});
+    const serviceFilePath = try std.fmt.allocPrint(allocator, "/usr/lib/systemd/system/{s}.service", .{serviceName});
+    defer allocator.free(serviceFilePath);
+
+    if (try fileExists(serviceFilePath))
+    {
+        log.debug("exists: {s}", .{serviceFilePath});
+        return true;
+    }
+    else
+    {
+        log.debug("dne: {s}", .{serviceFilePath});
+        return false;
+    }
+}
+
+fn start_app(app_name: String) !void
+{
+    log.info("start_app: {s}", .{app_name});
 
     var process = child.init(&[_]String{
-        "midclt", "call", "chart.release.scale", service_name, "{\"replica_count\": 1}"
+        "midclt", "call", "chart.release.scale", app_name, "{\"replica_count\": 1}"
     }, allocator);
     {
         process.stdin_behavior = child.StdIo.Ignore;
@@ -387,10 +443,33 @@ fn start_service(service_name: String) !void
     // NB: This (or one of the next lines) will throw 'error.FileNotFound' if midclt is not present.
     try process.spawn();
     var status = try process.wait();
+
+    if (status.Exited != 0)
+    {
+        log.err("unable to start {s} app, midclt exit status {}", .{app_name, status.Exited});
+    }
+    //???: process.deinit();
+}
+
+fn start_service(service_name: String) !void
+{
+    log.info("start_service: {s}", .{service_name});
+
+    var process = child.init(&[_]String{
+        SERVICE_SBIN, service_name, "start"
+    }, allocator);
+    {
+        process.stdin_behavior = child.StdIo.Ignore;
+        process.stdout_behavior = child.StdIo.Inherit;
+        process.stderr_behavior = child.StdIo.Inherit;
+    }
+
+    try process.spawn();
+    var status = try process.wait();
     
     if (status.Exited != 0)
     {
-        log.err("unable to start {s} service, midclt exit status {}", .{service_name, status.Exited});
+        log.err("unable to start {s} service, exit status {}", .{service_name, status.Exited});
     }
     //???: process.deinit();
 }
