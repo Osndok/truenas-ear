@@ -153,6 +153,53 @@ fn getLockStatus(dataset: String) !LockStatus
     return LockStatus.unknown;
 }
 
+fn list_unmounted_sub_datasets(dataset: String) ![] const String
+{
+    log.debug("list_unmounted_sub_datasets: {s}", .{dataset});
+
+    var lines = try run(&[_]String {
+        zfs(), "list", "-rH", "-o", "mounted,name"
+    });
+
+    var paths = std.ArrayList(String).init(allocator);
+
+    var tokenizer = std.mem.split(u8, lines, "\n");
+
+    while (tokenizer.next()) |line| {
+        //log.debug("line: {s}", .{line});
+
+        var lineTokenizer = std.mem.split(u8, line, "\t");
+
+        const firstField = lineTokenizer.next() orelse
+        {
+            log.err("malformed zfs list line? no first field: {s}", .{line});
+            continue;
+        };
+
+        const secondField = lineTokenizer.next() orelse
+        {
+            log.err("malformed zfs list line? no second field: {s}", .{line});
+            continue;
+        };
+
+        // NB: could be 'yes' or '-' (not mountable), we only want 'no'
+        if (!std.mem.eql(u8, firstField, "no")) {
+            //log.debug("not unmounted: {s}", .{secondField});
+            continue;
+        }
+
+        if (!std.mem.startsWith(u8, secondField, dataset)) {
+            //log.debug("irrelevant: {s}", .{secondField});
+            continue;
+        }
+
+        log.debug("needs mounting: {s}", .{secondField});
+        try paths.append(secondField);
+    }
+
+    return paths.toOwnedSlice();
+}
+
 fn is_locked(dataset: String) !void
 {
     var status = try getLockStatus(dataset);
@@ -233,8 +280,29 @@ fn zfs_mount(dataset: String) !void
     //???: process.deinit();
 }
 
+fn best_effort_post_unlock_recursive_mount_sub_datasets(dataset: String) void
+{
+    log.debug("best_effort_post_unlock_recursive_mount_sub_datasets: {s}", .{dataset});
+    var subsets = list_unmounted_sub_datasets(dataset)
+    catch
+    {
+        log.err("unable to list subsets of {s} dataset", .{dataset});
+        return;
+    };
+
+    for (subsets) |subset|
+    {
+        zfs_mount(subset)
+        catch |e|
+        {
+            log.err("could not cascade unlock to {s}: {}", .{subset, e});
+        };
+    }
+}
+
 fn do_post_unlock_followups(dataset: String) !void
 {
+    log.debug("do_post_unlock_followups: {s}", .{dataset});
 
     // NB: Assuming '/mnt/' prefix (TrueNAS)
     const mountPoint = try concat("/mnt/", dataset);
@@ -388,6 +456,7 @@ fn unlock(dataset: String) !void
 
     try zfs_load_key(dataset);
     try zfs_mount(dataset);
+    best_effort_post_unlock_recursive_mount_sub_datasets(dataset);
     try do_post_unlock_followups(dataset);
     // ??? Wait for kubernetes to reach a stable state?
 }
