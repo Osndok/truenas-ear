@@ -432,7 +432,8 @@ fn start_app(app_name: String) !void
     log.info("start_app: {s}", .{app_name});
 
     var process = child.init(&[_]String{
-        "midclt", "call", "chart.release.scale", app_name, "{\"replica_count\": 1}"
+        // before electric eel: "midclt", "call", "chart.release.scale", app_name, "{\"replica_count\": 1}"
+        "midclt", "call", "app.start", app_name
     }, allocator);
     {
         process.stdin_behavior = child.StdIo.Ignore;
